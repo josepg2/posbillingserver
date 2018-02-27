@@ -2,7 +2,8 @@ const path = require('path');
 const knex = require('knex')({
     client: "sqlite3",
     connection: {
-        filename: path.join('C:\\Users\\George Joseph\\AppData\\Roaming\\posbilling-system\\storage', "posbillingsystem.sqlite").toString()
+        //filename: path.join('C:\\Users\\George Joseph\\AppData\\Roaming\\posbilling-system\\storage', "posbillingsystem.sqlite").toString()
+        filename: path.join('C:\\Users\\George_Joseph02', "posbillingsystem.sqlite").toString()
         //filename : path.join(dataPath, "testdatabase.sqlite").toString()
     },
     useNullAsDefault: true
@@ -22,6 +23,14 @@ app.use(function (req, res, next) {
 
 
 app.get('/', (req, res) => res.send('Hello World!'));
+app.get('/api/storeid', (req, res) => {
+    knex('storeid')
+    .select()
+    .then(response => {
+        res.status(200).json(response[0]);
+    })
+}   
+)
 app.get('/api/inventory', getInventory);
 app.post('/api/item', (req, res) => {
     addToInventory(req.body, res)
@@ -71,10 +80,14 @@ function addToInventory(data, res) {
                     .where("prodid", data.prodid)
                     .select("id")
         })
+        .then(response => {
+            return knex('storeid')
+                    .where("key", "storeidkey")
+                    .update("prodid", response[0].id)
+        })
         .then(function (response){
             console.log(response); 
-            data.status = 'ok';
-            data.lastid = response.id;          
+            data.status = 'ok';          
             res.send(data);
         })
         .catch(function (error) {
@@ -135,6 +148,26 @@ function removeInventory(data, res) {
  
 function createTables() {
 
+    knex.schema.hasTable('storeid').then(function (exists) {
+        if (!exists) {
+            return knex.schema.createTable('storeid', function (table) {
+                table.increments();
+                table.string("key");
+                table.integer("prodid");
+                table.integer("billid");
+                table.integer("puchaseid");
+                table.timestamp("updated_at").defaultTo(knex.fn.now());
+            });
+        }
+    })
+    .then((response) => {
+        return knex('storeid')
+            .insert({key : "storeidkey"})
+    })
+    .catch((error) => {
+        console.log(error);
+    });
+
     knex.schema.hasTable('inventory').then(function (exists) {
         if (!exists) {
             return knex.schema.createTable('inventory', function (table) {
@@ -155,7 +188,31 @@ function createTables() {
                 table.unique("prodid");
             });
         }
-    });
+    })
+    .then(response => {
+        return knex('inventory')
+            .insert({
+                "prodid": "1"})
+    })
+    .then(response => {
+        return knex('inventory')
+                .where("prodid", "1")
+                .select("id")
+    })
+    .then(response => {
+        return knex('storeid')
+                .where("key", "storeidkey")
+                .update("prodid", response[0].id)
+    })
+    .then(response => {
+        console.log("ran");
+        return knex('inventory')
+                .where("prodid", "1")
+                .del()
+    })
+    .catch(error => {
+        console.log(error);
+    })
 
     knex.schema.hasTable('users').then(function (exists) {
         if (!exists) {
