@@ -12,8 +12,7 @@ const dateFormat = require('dateformat');
 const express = require('express');
 const app = express();
 
-dateFormat.masks.knexstartdate = 'yyyy-mm-dd" 00:00:00"';
-dateFormat.masks.knexstartdate = 'yyyy-mm-dd" 23:59:59"';
+dateFormat.masks.knexdate = 'yyyy-mm-dd" "hh:MM:ss"';
 
 var bodyParser = require('body-parser');
 app.use(bodyParser.json());
@@ -54,9 +53,11 @@ createTables();
 
 function getBill(req, res, next){
     console.log(req.query);
-    knex('sales')
-       // .whereNot("created_at" , "<", dateFormat(new Date(req.query.startdate), "knexstartdate"))
-       // .andWhereNot("created_at" , ">", dateFormat(new Date(req.query.enddate), "knexenddate"))
+    knex('inventory')
+        .whereNot("created_at" , "<", req.query.dateFrom)
+        .andWhereNot("created_at" , ">", req.query.dateTo)
+       //.whereNot("created_at" , "<", dateFormat(new Date(req.query.dateFrom), "knexdate"))
+      // .andWhereNot("created_at" , ">", dateFormat(new Date(req.query.dateTo), "knexdate"))
         .select()
         .then(response => {
             res.status(200).json(response);
@@ -378,5 +379,3 @@ function createTables() {
 }
 
 app.listen(3000, () => console.log('Example app listening on port 3000!'))
-
-console.log(knex.fn.now())
