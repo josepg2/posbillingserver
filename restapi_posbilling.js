@@ -48,18 +48,68 @@ app.post('/api/itemremove', (req, res) => {
 
 app.post('/api/newbill', addToBill);
 app.get('/api/bill', getBill)
+app.get('/api/billitems', getBillItems)
+app.get('/api/tax', getTax)
+app.get('/api/category', getCategory)
+app.get('/api/offers', getOffers)
 
 createTables();
 
+function getOffers(req, res, next){
+    knex('offers')
+      .select('offerid', 'name', 'type', 'value')
+      .then(response => {
+          res.status(200).json(response);
+      })
+      .catch(error => {
+          res.status(200).json({status : 'failed'});
+      })
+}
+
+function getCategory(req, res, next){
+    knex('category')
+      .select('id', 'name')
+      .then(response => {
+          res.status(200).json(response);
+      })
+      .catch(error => {
+          res.status(200).json({status : 'failed'});
+      })
+}
+
+function getTax(req, res, next){
+    knex('taxes')
+      .select('taxid', 'taxname', 'taxvalue')
+      .then(response => {
+          res.status(200).json(response);
+      })
+      .catch(error => {
+          res.status(200).json({status : 'failde'});
+      })
+}
+
+function getBillItems(req, res, next) {
+    knex('salesitems')
+        .where("billid", req.query.billid)
+        .select('prodid', 'prodname', 'quantity', 'tax', 'offvalue', 'unitprice')
+        .then(response => {
+            res.status(200).json(response);
+        })
+        .catch(error => {
+            req.status(200).json({status: 'error'});
+        })
+}
+
 function getBill(req, res, next){
-    console.log(req.query);
-    knex('inventory')
+    knex('sales')
         .whereNot("created_at" , "<", req.query.dateFrom)
         .andWhereNot("created_at" , ">", req.query.dateTo)
-       //.whereNot("created_at" , "<", dateFormat(new Date(req.query.dateFrom), "knexdate"))
-      // .andWhereNot("created_at" , ">", dateFormat(new Date(req.query.dateTo), "knexdate"))
         .select()
         .then(response => {
+            for (let i = 0; i < response.length; i++) {
+                response[i].created_at = response[i].created_at + ' UTC';
+                response[i].items = [];
+            }
             res.status(200).json(response);
         })
         .catch(error => {
@@ -74,7 +124,6 @@ function getInventory(req, res, next) {
         .then(function (response) {
             for (let i = 0; i < response.length; i++) {
                 response[i].isremoved = !!+response[i].isremoved;
-                response[i].hasoff = !!+response[i].hasoff;
                 response[i].created_at = response[i].created_at + ' UTC';
                 response[i].updated_at = response[i].updated_at + ' UTC';
             }
@@ -171,7 +220,8 @@ function removeInventory(data, res) {
 
 function addToBill(req, res, next) {
     let bill = req.body;
-    let arr = [];
+    let arrSales = [];
+    let arrInventory = [];
     knex('sales')
         .insert({
             "billid": bill.billid,
@@ -187,7 +237,7 @@ function addToBill(req, res, next) {
         })
         .then(response => {
             bill.items.forEach(item => {
-                arr.push(
+                arrSales.push(
                     knex('salesitems')
                     .insert({
                         "billid": bill.billid,
@@ -200,7 +250,17 @@ function addToBill(req, res, next) {
                     })
                 )
             })
-            return Promise.all(arr);
+            return Promise.all(arrSales);
+        })
+        .then(response => {
+            bill.items.forEach(item => {
+                arrInventory.push(
+                    knex('inventory')
+                    .where("prodid", item.prodid)
+                    .decrement("stock", item.quantity)
+                )
+            })
+            return Promise.all(arrInventory);
         })
         .then(response => {
             console.log(response);
@@ -246,9 +306,9 @@ function createTables() {
                     table.boolean("isremoved");
                     table.integer("stock");
                     table.float("unitprice", 9, 2);
-                    table.string("category");
+                    table.integer("category");
                     table.integer("tax");
-                    table.boolean("hasoff");
+                    table.integer("hasoff");
                     table.string("offtype");
                     table.float("offvalue", 9, 2);
                     table.string("updated_by");
@@ -371,11 +431,58 @@ function createTables() {
                 return knex.schema.createTable('taxes', function (table) {
                     table.increments('taxid');
                     table.string("taxname");
-                    table.json("taxvalue");
+                    table.integer("taxvalue");
                     table.timestamp("updated_at").defaultTo(knex.fn.now());
                 });
             }
         });
+
+    knex.schema.hasTable('category')
+        .then(function (exists) {
+            if (!exists) {
+                return knex.schema.createTable('category', function (table) {
+                    table.increments('id');
+                    table.string("name");
+                    table.integer("count");
+                    table.timestamp("updated_at").defaultTo(knex.fn.now());
+                });
+            }
+        });
+
+    knex.schema.hasTable('offers')
+        .then(function (exists) {
+            if (!exists) {
+                return knex.schema.createTable('offers', function (table) {
+                    table.increments();
+                    table.integer('offerid');
+                    table.string("name");
+                    table.string('type');
+                    table.integer('value');
+                });
+            }
+        })
+        .then(response => {
+            if(response){
+                return knex('offers')
+                        .insert([{
+                            offerid : 0,
+                            name : 'None',
+                            type : 'rupee',
+                            value : 0
+                        },
+                        {
+                            offerid : 1,
+                            name : 'Custom',
+                            type : 'rupee',
+                            value : 0
+                        }
+                    ])
+            }
+        })
+        .catch(error => {
+            console.log(error);
+        })
+
 }
 
 app.listen(3000, () => console.log('Example app listening on port 3000!'))
