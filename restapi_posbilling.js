@@ -2,8 +2,8 @@ const path = require('path');
 const knex = require('knex')({
     client: "sqlite3",
     connection: {
-        filename: path.join('C:\\Users\\George Joseph\\AppData\\Roaming\\posbilling-system\\storage', "posbillingsystem.sqlite").toString()
-        //filename: path.join('C:\\Users\\George_Joseph02', "posbillingsystem.sqlite").toString()
+        //filename: path.join('C:\\Users\\George Joseph\\AppData\\Roaming\\posbilling-system\\storage', "posbillingsystem.sqlite").toString()
+        filename: path.join('C:\\Users\\George_Joseph02', "posbillingsystem.sqlite").toString()
         //filename : path.join(dataPath, "testdatabase.sqlite").toString()
     },
     useNullAsDefault: true
@@ -33,27 +33,36 @@ app.get('/api/storeid', (req, res) => {
             res.status(200).json(response[0]);
         })
 })
-app.get('/api/inventory', getInventory);
-app.post('/api/item', (req, res) => {
-    addToInventory(req.body, res)
-});
-app.post('/api/itemedit', (req, res) => {
-    console.log(req.body);
-    editInventory(req.body, res)
-});
-app.post('/api/itemremove', (req, res) => {
-    console.log(req.body);
-    removeInventory(req.body, res)
-});
+app.get('/api/inventory', getInventory)
+app.post('/api/item', addToInventory)
+app.post('/api/itemedit', editInventory)
+app.post('/api/itemremove', removeInventory);
 
-app.post('/api/newbill', addToBill);
 app.get('/api/bill', getBill)
 app.get('/api/billitems', getBillItems)
+app.post('/api/newbill', addToBill)
+
 app.get('/api/tax', getTax)
+
 app.get('/api/category', getCategory)
+app.post('/api/category', addToCategory)
+
 app.get('/api/offers', getOffers)
 
+app.get('/api/users', getUsers)
+
 createTables();
+
+function getUsers(req, res, next){
+    knex('users')
+        .select()
+        .then(response => {
+            res.status(200).json(response);
+        })
+        .catch(error => {
+            res.status(200).json({status : 'failed'});
+        })
+}
 
 function getOffers(req, res, next){
     knex('offers')
@@ -75,6 +84,25 @@ function getCategory(req, res, next){
       .catch(error => {
           res.status(200).json({status : 'failed'});
       })
+}
+
+function addToCategory(req, res, next){
+    let data = req.body;
+    knex('category')
+        .insert([{
+            name : data.name,
+            count: 0
+        }])
+        .then(response => {
+            return knex('category')
+                .select()
+        })
+        .then(response => {
+            res.status(200).json(response);
+        })
+        .catch(error => {
+            res.status(200).json({error : error});
+        })
 }
 
 function getTax(req, res, next){
@@ -132,7 +160,8 @@ function getInventory(req, res, next) {
         });
 }
 
-function addToInventory(data, res) {
+function addToInventory(req, res, next) {
+    let data = req.body;
     knex('inventory')
         .insert({
             "prodid": data.prodid,
@@ -170,7 +199,8 @@ function addToInventory(data, res) {
         })
 }
 
-function editInventory(data, res) {
+function editInventory(req, res, next) {
+    let data = req.body;
     knex('inventory')
         .where("prodid", data.prodid)
         .update({
@@ -199,7 +229,8 @@ function editInventory(data, res) {
         })
 }
 
-function removeInventory(data, res) {
+function removeInventory(req, res, next) {
+    let data = req.body;
     knex('inventory')
         .where("prodid", data.prodid)
         .update({
@@ -361,7 +392,21 @@ function createTables() {
                 table.timestamp("created_at").defaultTo(knex.fn.now());
             });
         }
-    });
+    })
+    .then(response => {
+        if(response) {
+            return knex('users')
+                .insert([{
+                    username : 'admin',
+                    password : 'admin',
+                    isadmin  : true,
+                    canedit  : true
+                }])
+        }
+    })
+    .catch(error => {
+        console.log(error);
+    })
 
     knex.schema.hasTable('sales').then(function (exists) {
         if (!exists) {
