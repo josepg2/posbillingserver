@@ -2,8 +2,8 @@ const path = require('path');
 const knex = require('knex')({
     client: "sqlite3",
     connection: {
-        //filename: path.join('C:\\Users\\George Joseph\\AppData\\Roaming\\posbilling-system\\storage', "posbillingsystem.sqlite").toString()
-        filename: path.join('C:\\Users\\George_Joseph02', "posbillingsystem.sqlite").toString()
+        filename: path.join('C:\\Users\\George Joseph\\AppData\\Roaming\\posbilling-system\\storage', "posbillingsystem.sqlite").toString()
+        //filename: path.join('C:\\Users\\George_Joseph02', "posbillingsystem.sqlite").toString()
         //filename : path.join(dataPath, "testdatabase.sqlite").toString()
     },
     useNullAsDefault: true
@@ -11,14 +11,15 @@ const knex = require('knex')({
 const dateFormat = require('dateformat');
 const express = require('express');
 const app = express();
+const bodyParser = require('body-parser');
 
 dateFormat.masks.knexdate = 'yyyy-mm-dd" "hh:MM:ss"';
 
-var bodyParser = require('body-parser');
 app.use(bodyParser.json());
 
 app.use(function (req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
     next();
 });
@@ -26,13 +27,7 @@ app.use(function (req, res, next) {
 
 
 app.get('/', (req, res) => res.send('Hello World!'));
-app.get('/api/storeid', (req, res) => {
-    knex('storeid')
-        .select()
-        .then(response => {
-            res.status(200).json(response[0]);
-        })
-})
+
 app.get('/api/inventory', getInventory)
 app.post('/api/item', addToInventory)
 app.post('/api/itemedit', editInventory)
@@ -43,15 +38,65 @@ app.get('/api/billitems', getBillItems)
 app.post('/api/newbill', addToBill)
 
 app.get('/api/tax', getTax)
+app.post('/api/tax', addNewTax)
+app.delete('/api/tax', removeTax)
 
 app.get('/api/category', getCategory)
 app.post('/api/category', addToCategory)
+app.delete('/api/category', removeCategory)
 
 app.get('/api/offers', getOffers)
+app.post('/api/offers', addNewOffer)
+app.delete('/api/offers', removeOffer)
 
 app.get('/api/users', getUsers)
+app.post('/api/user', addNewUser)
+app.post('/api/removeuser', removeUser)
+
+app.get('/api/storeid', getStoreId)
 
 createTables();
+
+function getStoreId(req, res, next){
+    knex('storeid')
+        .select()
+        .then(response => {
+            res.status(200).json(response[0]);
+        })
+}
+
+function addNewTax(req, res, next){
+    let data = req.body;
+    knex('taxes')
+        .insert([{
+            taxname : data.taxname,
+            taxvalue: data.taxvalue
+        }])
+        .then(response => {
+            res.status(200).json(response);
+        })
+        .catch(error => {
+            console.log(error)
+            res.status(200).json({err : error});
+        })
+}
+
+function removeTax(req, res, next){  
+    knex('taxes')
+      .where('taxid', parseInt(req.query.id))
+      .del()
+      .then(response => {
+          return knex('inventory')
+                    .where('tax', parseInt(req.query.id))
+                    .update('tax', parseInt(req.query.replace))
+      })
+      .then(response => {
+        res.status(200).json({id : parseInt(req.query.id), output : response})
+      })
+      .catch(error => {
+          res.status(200).json({'status' : 'failed'})
+      })
+}
 
 function getUsers(req, res, next){
     knex('users')
@@ -75,6 +120,87 @@ function getOffers(req, res, next){
       })
 }
 
+function addNewOffer(req, res, next){
+    let data = req.body;
+    knex('storeid')
+        .select('offerid')
+        .then(response => {
+            return knex('offers')
+                 .insert([{
+                     offerid : response[0].offerid + 1,
+                     name : data.name,
+                     type  : data.type,
+                     value  : data.value
+                 }])
+        })
+        .then(response => {
+            return knex('storeid')
+                    .where("key", "storeidkey")
+                    .increment('offerid', 1)
+        })
+        .then(response => {
+            res.status(200).json(response);
+        })
+        .catch(error => {
+            console.log(error)
+            res.status(200).json({status : 'failed'})
+        })
+}
+
+function removeOffer(req, res, next){  
+    knex('offers')
+      .where('offerid', parseInt(req.query.id))
+      .del()
+      .then(response => {
+          return knex('inventory')
+                    .where('hasoff', parseInt(req.query.id))
+                    .update({
+                                'hasoff' : parseInt(req.query.replace),
+                                'offtype': 'rupee',
+                                'offvalue' : 0
+                            })
+      })
+      .then(response => {
+        res.status(200).json({id : parseInt(req.query.id), output : response})
+      })
+      .catch(error => {
+          res.status(200).json({'status' : 'failed'})
+      })
+}
+
+function addNewUser(req, res, next){
+    let data = req.body;
+    knex('users')
+        .insert([{
+            username : data.username,
+            password : data.password,
+            isadmin  : false,
+            canedit  : data.canedit,
+            active   : true
+        }])
+        .then(response => {
+            res.status(200).json(response);
+        })
+        .catch(error => {
+            console.log(error)
+            res.status(200).json({status : 'failed'})
+        })
+}
+
+function removeUser(req, res, next){
+    let data = req.body;
+    knex('users')
+        .where('id', data.id)
+        .update('active', false)
+        .then(response => {
+            res.status(200).json(response);
+        })
+        .catch(error => {
+            console.log(error)
+            res.status(200).json({status : 'failed'})
+        })
+}
+
 function getCategory(req, res, next){
     knex('category')
       .select('id', 'name')
@@ -83,6 +209,23 @@ function getCategory(req, res, next){
       })
       .catch(error => {
           res.status(200).json({status : 'failed'});
+      })
+}
+
+function removeCategory(req, res, next){  
+    knex('category')
+      .where('id', parseInt(req.query.id))
+      .del()
+      .then(response => {
+          return knex('inventory')
+                    .where('category', parseInt(req.query.id))
+                    .update('category', parseInt(req.query.replace))
+      })
+      .then(response => {
+        res.status(200).json({id : parseInt(req.query.id), output : response})
+      })
+      .catch(error => {
+          res.status(200).json({'status' : 'failed'})
       })
 }
 
@@ -310,6 +453,7 @@ function createTables() {
                     table.integer("prodid");
                     table.integer("billid");
                     table.integer("puchaseid");
+                    table.integer("offerid");
                     table.timestamp("updated_at").defaultTo(knex.fn.now());
                 });
             }
@@ -389,7 +533,9 @@ function createTables() {
                 table.string("password");
                 table.boolean("isadmin");
                 table.boolean("canedit");
+                table.boolean('active');
                 table.timestamp("created_at").defaultTo(knex.fn.now());
+                table.unique('username');
             });
         }
     })
@@ -400,7 +546,8 @@ function createTables() {
                     username : 'admin',
                     password : 'admin',
                     isadmin  : true,
-                    canedit  : true
+                    canedit  : true,
+                    active : true
                 }])
         }
     })
@@ -478,9 +625,22 @@ function createTables() {
                     table.string("taxname");
                     table.integer("taxvalue");
                     table.timestamp("updated_at").defaultTo(knex.fn.now());
+                    table.unique("taxname");
                 });
             }
-        });
+        })
+        .then(response => {
+            if(response){
+                return knex('taxes')
+                        insert([{
+                            taxname : 'None',
+                            taxvalue: 0
+                        }])
+            }
+        })
+        .catch(error => {
+            console.log(error);
+        })
 
     knex.schema.hasTable('category')
         .then(function (exists) {
@@ -490,9 +650,22 @@ function createTables() {
                     table.string("name");
                     table.integer("count");
                     table.timestamp("updated_at").defaultTo(knex.fn.now());
+                    table.unique("name");
                 });
             }
-        });
+        })
+        .then(response => {
+            if(response) {
+                return knex('category')
+                           .insert([{
+                                name : 'None',
+                                count: 0
+                           }])
+            }
+        })
+        .catch(error => {
+            console.log(error);
+        })
 
     knex.schema.hasTable('offers')
         .then(function (exists) {
@@ -503,6 +676,7 @@ function createTables() {
                     table.string("name");
                     table.string('type');
                     table.integer('value');
+                    table.unique('name');
                 });
             }
         })
@@ -523,6 +697,11 @@ function createTables() {
                         }
                     ])
             }
+        })
+        .then(response => {
+            return knex('storeid')
+                    .where("key", "storeidkey")
+                    .update("offerid", 1)
         })
         .catch(error => {
             console.log(error);
