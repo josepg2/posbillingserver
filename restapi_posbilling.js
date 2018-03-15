@@ -2,8 +2,8 @@ const path = require('path');
 const knex = require('knex')({
     client: "sqlite3",
     connection: {
-        filename: path.join('C:\\Users\\George Joseph\\AppData\\Roaming\\posbilling-system\\storage', "posbillingsystem.sqlite").toString()
-        //filename: path.join('C:\\Users\\George_Joseph02', "posbillingsystem.sqlite").toString()
+        //filename: path.join('C:\\Users\\George Joseph\\AppData\\Roaming\\posbilling-system\\storage', "posbillingsystem.sqlite").toString()
+        filename: path.join('C:\\Users\\George_Joseph02', "posbillingsystem.sqlite").toString()
         //filename : path.join(dataPath, "testdatabase.sqlite").toString()
     },
     useNullAsDefault: true
@@ -632,7 +632,7 @@ function createTables() {
         .then(response => {
             if(response){
                 return knex('taxes')
-                        insert([{
+                        .insert([{
                             taxname : 'None',
                             taxvalue: 0
                         }])
