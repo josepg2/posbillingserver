@@ -2,8 +2,8 @@ const path = require('path');
 const knex = require('knex')({
     client: "sqlite3",
     connection: {
-        //filename: path.join('C:\\Users\\George Joseph\\AppData\\Roaming\\posbilling-system\\storage', "posbillingsystem.sqlite").toString()
-        filename: path.join('C:\\Users\\George_Joseph02', "posbillingsystem.sqlite").toString()
+        filename: path.join('C:\\Users\\George Joseph\\AppData\\Roaming\\posbilling-system\\storage', "posbillingsystem.sqlite").toString()
+        //filename: path.join('C:\\Users\\George_Joseph02', "posbillingsystem.sqlite").toString()
         //filename : path.join(dataPath, "testdatabase.sqlite").toString()
     },
     useNullAsDefault: true
@@ -31,11 +31,15 @@ app.get('/', (req, res) => res.send('Hello World!'));
 app.get('/api/inventory', getInventory)
 app.post('/api/item', addToInventory)
 app.post('/api/itemedit', editInventory)
-app.post('/api/itemremove', removeInventory);
+app.post('/api/itemremove', removeInventory)
 
 app.get('/api/bill', getBill)
 app.get('/api/billitems', getBillItems)
 app.post('/api/newbill', addToBill)
+
+app.get('/api/purchase', getPurchase)
+app.get('/api/purchaseitems', getPurchaseItems)
+app.post('/api/purchase', addToPurchase)
 
 app.get('/api/tax', getTax)
 app.post('/api/tax', addNewTax)
@@ -442,6 +446,83 @@ function addToBill(req, res, next) {
         })
 }
 
+function addToPurchase(req, res, next) {
+    console.log("here")
+    let purchase = req.body;
+    let arrPurchase = [];
+    let arrInventory = [];
+    knex('purchase')
+        .insert({
+            "purchaseid": purchase.purchaseid,
+            "discount": purchase.discount,
+            "total": purchase.total,
+            "created_by": "gj"
+        })
+        .then(response => {
+            return knex('storeid')
+                .where("key", "storeidkey")
+                .increment('purchaseid', 1)
+        })
+        .then(response => {
+            purchase.items.forEach(item => {
+                arrPurchase.push(
+                    knex('purchaseitems')
+                    .insert({
+                        "purchaseid": purchase.purchaseid,
+                        "prodid": item.prodid,
+                        "quantity": item.quantity,
+                        "unitprice": item.unitprice,
+                    })
+                )
+            })
+            return Promise.all(arrPurchase);
+        })
+        .then(response => {
+            purchase.items.forEach(item => {
+                arrInventory.push(
+                    knex('inventory')
+                    .where("prodid", item.prodid)
+                    .increment("stock", item.quantity)
+                )
+            })
+            return Promise.all(arrInventory);
+        })
+        .then(response => {
+            console.log(response);
+            res.status(200).json(response);
+        })
+}
+
+function getPurchase(req, res, next){
+    knex('purchase')
+        .whereNot("created_at" , "<", req.query.dateFrom)
+        .andWhereNot("created_at" , ">", req.query.dateTo)
+        .select()
+        .then(response => {
+            for (let i = 0; i < response.length; i++) {
+                response[i].created_at = response[i].created_at + ' UTC';
+                response[i].items = [];
+            }
+            res.status(200).json(response);
+        })
+        .catch(error => {
+            res.status(200);
+        })
+}
+
+function getPurchaseItems(req, res, next) {
+    knex('purchaseitems')
+        .where("purchaseid", req.query.purchaseid)
+        .join("inventory", "purchaseitems.prodid", "inventory.prodid")
+        .select('purchaseitems.prodid', 'inventory.prodname', 'purchaseitems.quantity', 'inventory.tax', 'purchaseitems.unitprice')
+        .then(response => {
+            res.status(200).json(response);
+        })
+        .catch(error => {
+            req.status(200).json({status: 'error'});
+        })
+}
+
 function createTables() {
 
     knex.schema.hasTable('storeid')
@@ -452,7 +533,7 @@ function createTables() {
                     table.string("key");
                     table.integer("prodid");
                     table.integer("billid");
-                    table.integer("puchaseid");
+                    table.integer("purchaseid");
                     table.integer("offerid");
                     table.timestamp("updated_at").defaultTo(knex.fn.now());
                 });
@@ -613,6 +694,66 @@ function createTables() {
                     table.float("unitprice");
                     table.float("tax");
                     table.float("offvalue");
+                })
+            }
+        })
+
+    knex.schema.hasTable('purchase')
+        .then(function (exists) {
+            if(!exists){
+                return knex.schema.createTable('purchase', function (table){
+                    table.increments('id');
+                    table.string('purchaseid');
+                    table.float('total');
+                    table.float('discount');
+                    table.string("created_by");
+                    table.timestamp("created_at").defaultTo(knex.fn.now());
+                    table.unique('purchaseid');
+                })
+            }
+        })
+        .then(response => {
+            if (response) {
+                return knex('purchase')
+                    .insert({
+                        "purchaseid": "1"
+                    })
+            }
+        })
+        .then(response => {
+            if (response) {
+                return knex('purchase')
+                        .where("purchaseid", "1")
+                        .select("id")
+            }
+        })
+        .then(response => {
+            if (response) {
+                return knex('storeid')
+                    .where("key", "storeidkey")
+                    .update("purchaseid", response[0].id)
+            }
+        })
+        .then(response => {
+            if (response) {
+                return knex('purchase')
+                    .where("purchaseid", "1")
+                    .del()
+            }
+        })
+        .catch(error => {
+            console.log(error);
+        })
+
+    knex.schema.hasTable('purchaseitems')
+        .then(function (exists) {
+            if (!exists) {
+                return knex.schema.createTable('purchaseitems', function (table) {
+                    table.increments();
+                    table.string("purchaseid");
+                    table.string("prodid");
+                    table.integer("quantity");
+                    table.float("unitprice");
                 })
             }
         })
