@@ -55,6 +55,7 @@ app.delete('/api/offers', removeOffer)
 
 app.get('/api/users', getUsers)
 app.post('/api/user', addNewUser)
+app.post('/api/updateuser', updateUser)
 app.post('/api/removeuser', removeUser)
 
 app.get('/api/storeid', getStoreId)
@@ -187,6 +188,23 @@ function addNewUser(req, res, next){
         })
         .catch(error => {
             console.log(error)
+            res.status(200).json({status : 'failed'})
+        })
+}
+
+function updateUser(req, res, next){
+    let data = req.body;
+    knex('users')
+        .where('username', data.username)
+        .update({
+            "password" : data.password,
+            "canedit"  : data.canedit
+        })
+        .then(response => {
+            res.status(200).json(response);
+        })
+        .catch(error => {
+            console.log(error);
             res.status(200).json({status : 'failed'})
         })
 }
