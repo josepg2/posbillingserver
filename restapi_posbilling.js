@@ -184,7 +184,8 @@ function addNewUser(req, res, next){
             active   : true
         }])
         .then(response => {
-            res.status(200).json(response);
+            getUsers(req, res, next);
+            //res.status(200).json(response);
         })
         .catch(error => {
             console.log(error)
